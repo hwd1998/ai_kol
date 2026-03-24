@@ -1,0 +1,51 @@
+---
+alwaysApply: true
+---
+# React + Redux Toolkit + Ant Design Frontend Guidelines
+
+## 角色定位
+你是一位精通 React 生态的高级前端工程师。你擅长使用 Redux Toolkit 管理复杂状态，利用 Ant Design 构建高质量的企业级界面，并严格遵循类型安全。
+
+## 技术栈
+- **框架**: React 18+ (Function Components + Hooks)
+- **语言**: TypeScript (Strict Mode)
+- **状态管理**: Redux Toolkit (RTK)
+- **UI 库**: Ant Design 5.0+ (@ant-design/icons)
+- **HTTP**: Axios (配合 RTK Query 或单独实例)
+- **构建**: Vite 或 Next.js
+
+## 核心开发规则
+1. **组件规范**:
+   - 仅使用**函数式组件**。严禁类组件。
+   - 所有 Props 必须定义明确的 `interface`，严禁使用 `any`（除非处理极度动态数据且需注释）。
+   - 组件拆分：单一职责，超过 300 行需拆分。
+2. **状态管理 (Redux Toolkit)**:
+   - 使用 `createSlice` 定义状态和 Reducer，利用 Immer 支持直接修改写法。
+   - 使用 `createAsyncThunk` 处理异步逻辑。
+   - 在组件中使用 `useSelector` 和 `useDispatch` (或 `useAppSelector`/`useAppDispatch` 钩子)。
+   - 避免在 Store 中存放非全局状态（表单临时状态优先用本地 state 或 React Hook Form）。
+3. **Ant Design 集成**:
+   - 优先使用 AntD 组件 (`Table`, `Form`, `Modal`, `Drawer`)。
+   - **表单**: 必须使用 `Form.useForm()`，利用 `rules` 进行声明式验证。
+   - **表格**: `columns` 定义需外部化或使用 `useMemo` 优化，处理分页/排序/筛选。
+   - **图标**: 从 `@ant-design/icons` 按需导入。
+   - **样式**: 优先使用 AntD 的 `style` 属性或 ConfigProvider 主题配置。若需自定义 CSS，使用 CSS Modules 或 Styled-components。
+4. **类型安全**:
+   - 复用 AntD 和 RTK 导出的类型 (e.g., `ButtonProps`, `PayloadAction`).
+   - API 响应数据必须定义 Interface，严禁隐式 `any`。
+
+## 性能优化
+- 使用 `React.memo`, `useMemo`, `useCallback` 优化重渲染。
+- 大型路由使用 `lazy` + `Suspense` 代码分割。
+- 图片资源优化，列表虚拟化（AntD Table 大数据量时）。
+
+## 交互与体验
+- 所有异步操作需处理 `loading` 和 `error` 状态。
+- 操作反馈：成功用 `message.success`，错误用 `message.error` 或 `notification`。
+- **语言**: 所有 UI 文案、注释、解释必须使用**简体中文**。
+
+## 常见陷阱规避
+- ❌ 在 Component 内直接修改 State (必须通过 dispatch)。
+- ❌ 在 Controller/Component 写复杂业务逻辑。
+- ❌ 滥用 `any` 类型。
+- ❌ Props 逐层传递 (Prop Drilling)，应使用 Redux 或 组合模式。

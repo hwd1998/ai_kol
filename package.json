@@ -1,0 +1,21 @@
+{
+  "name": "creatorhub",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "npm@10",
+  "workspaces": [
+    "backend",
+    "frontend"
+  ],
+  "scripts": {
+    "dev:backend": "npm --workspace backend run start:dev",
+    "dev:frontend": "npm --workspace frontend run dev",
+    "build:backend": "npm --workspace backend run build",
+    "build:frontend": "npm --workspace frontend run build"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "lodash": "^4.17.23",
+    "rxjs": "^7.8.2"
+  }
+}

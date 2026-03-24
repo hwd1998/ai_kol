@@ -1,0 +1,10 @@
+# 忽略 node_modules 文件夹
+node_modules/
+
+# 通常建议一起忽略的其他文件
+.DS_Store
+.env
+*.log
+dist/
+build/
+backend/uploads/

@@ -28,7 +28,7 @@ interface ReviewItem {
   filePath: string;
   fileOriginalName: string;
   scheduledTime: string;
-  status: 'PENDING_REVIEW' | 'APPROVED' | 'REJECTED' | 'PUBLISHED';
+  status: 'DRAFT' | 'PENDING_REVIEW' | 'APPROVED' | 'REJECTED' | 'PUBLISHED';
   publishMode: 'MANUAL' | 'SCHEDULED' | null;
   rejectReason: string | null;
   createdAt: string;
@@ -80,7 +80,7 @@ export const AdminReviewBoardPage: React.FC = () => {
     setLoading(true);
     try {
       const res = await api.get<ReviewItem[]>('/contents');
-      setList(res.data);
+      setList(res.data.filter((item) => item.status !== 'DRAFT'));
     } finally {
       setLoading(false);
     }
@@ -284,7 +284,7 @@ export const AdminReviewBoardPage: React.FC = () => {
           <Button
             size="small"
             danger
-            disabled={r.status === 'PUBLISHED'}
+            disabled={r.status !== 'PENDING_REVIEW'}
             onClick={() => openReject(r.id)}
           >
             驳回

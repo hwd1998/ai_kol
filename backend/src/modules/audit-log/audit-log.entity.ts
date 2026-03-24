@@ -12,6 +12,9 @@ import { UserEntity } from '../user/user.entity';
 export type AuditActionType =
   | 'LOGIN'
   | 'UPLOAD'
+  | 'CONTENT_EDIT'
+  | 'CONTENT_SUBMIT'
+  | 'CONTENT_WITHDRAW'
   | 'REVIEW_APPROVE'
   | 'REVIEW_REJECT'
   | 'MOCK_PUBLISH'

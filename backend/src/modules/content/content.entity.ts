@@ -10,7 +10,7 @@ import {
 import { UserEntity } from '../user/user.entity';
 import { SocialAccountEntity } from '../social-account/social-account.entity';
 
-export type ContentStatus = 'PENDING_REVIEW' | 'APPROVED' | 'REJECTED' | 'PUBLISHED';
+export type ContentStatus = 'DRAFT' | 'PENDING_REVIEW' | 'APPROVED' | 'REJECTED' | 'PUBLISHED';
 export type PublishMode = 'MANUAL' | 'SCHEDULED';
 
 @Entity({ name: 'contents' })
@@ -49,8 +49,8 @@ export class ContentEntity {
 
   @Column({
     type: 'enum',
-    enum: ['PENDING_REVIEW', 'APPROVED', 'REJECTED', 'PUBLISHED'],
-    default: 'PENDING_REVIEW',
+    enum: ['DRAFT', 'PENDING_REVIEW', 'APPROVED', 'REJECTED', 'PUBLISHED'],
+    default: 'DRAFT',
   })
   status!: ContentStatus;
 

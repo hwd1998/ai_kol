@@ -14,6 +14,9 @@ export interface CreateAuditLogInput {
 
 const CONTENT_ACTION_TYPES: AuditActionType[] = [
   'UPLOAD',
+  'CONTENT_EDIT',
+  'CONTENT_SUBMIT',
+  'CONTENT_WITHDRAW',
   'REVIEW_APPROVE',
   'REVIEW_REJECT',
   'MOCK_PUBLISH',

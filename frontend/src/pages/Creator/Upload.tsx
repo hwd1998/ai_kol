@@ -13,7 +13,7 @@ import {
   Upload,
   message,
 } from 'antd';
-import { ClockCircleOutlined, DownloadOutlined, PlayCircleOutlined, PlusOutlined, ReloadOutlined, SendOutlined, UploadOutlined } from '@ant-design/icons';
+import { CheckOutlined, ClockCircleOutlined, DownloadOutlined, EditOutlined, PlayCircleOutlined, PlusOutlined, ReloadOutlined, RollbackOutlined, SendOutlined, UploadOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import type { Dayjs } from 'dayjs';
 import dayjs from 'dayjs';
@@ -38,7 +38,7 @@ interface ContentItem {
   productName: string;
   description: string;
   scheduledTime: string;
-  status: 'PENDING_REVIEW' | 'APPROVED' | 'REJECTED' | 'PUBLISHED';
+  status: 'DRAFT' | 'PENDING_REVIEW' | 'APPROVED' | 'REJECTED' | 'PUBLISHED';
   publishMode: 'MANUAL' | 'SCHEDULED' | null;
   rejectReason: string | null;
   createdAt: string;
@@ -57,6 +57,13 @@ interface UploadMetaForm {
   scheduledTime: Dayjs;
 }
 
+interface DraftEditForm {
+  targetAccountId: number;
+  productName: string;
+  description: string;
+  scheduledTime: Dayjs;
+}
+
 interface InitUploadResponse {
   uploadId: string;
   chunkSize: number;
@@ -68,6 +75,7 @@ interface MergeUploadResponse {
 }
 
 const STATUS_CONFIG: Record<ContentItem['status'], { label: string; color: string }> = {
+  DRAFT: { label: '草稿', color: 'gold' },
   PENDING_REVIEW: { label: '待审核', color: 'default' },
   APPROVED: { label: '待发布', color: 'blue' },
   REJECTED: { label: '已驳回', color: 'red' },
@@ -85,6 +93,7 @@ function formatTargetAccountLabel(acct: ContentItem['targetAccount']): string {
 export const CreatorUploadPage: React.FC = () => {
   const role = useAppSelector((state) => state.auth.role);
   const [form] = Form.useForm<UploadMetaForm>();
+  const [draftForm] = Form.useForm<DraftEditForm>();
   const [modalOpen, setModalOpen] = React.useState(false);
   const [uploading, setUploading] = React.useState(false);
   const [uploadProgress, setUploadProgress] = React.useState(0);
@@ -96,6 +105,8 @@ export const CreatorUploadPage: React.FC = () => {
   const [previewOpen, setPreviewOpen] = React.useState(false);
   const [previewUrl, setPreviewUrl] = React.useState('');
   const [previewTitle, setPreviewTitle] = React.useState('');
+  const [editingDraft, setEditingDraft] = React.useState<ContentItem | null>(null);
+  const [savingDraft, setSavingDraft] = React.useState(false);
 
   const [filterTargetAccountId, setFilterTargetAccountId] = React.useState<number | undefined>(undefined);
   const [filterProductName, setFilterProductName] = React.useState<string | undefined>(undefined);
@@ -241,7 +252,7 @@ export const CreatorUploadPage: React.FC = () => {
 
       setUploadProgress(100);
       const count = values.targetAccountIds.length;
-      message.success(count > 1 ? `已创建 ${count} 条内容，等待审核` : '上传成功，等待审核');
+      message.success(count > 1 ? `已创建 ${count} 条草稿内容` : '已保存为草稿');
       setModalOpen(false);
       form.resetFields();
       setVideoFile(null);
@@ -254,6 +265,58 @@ export const CreatorUploadPage: React.FC = () => {
   };
 
   /* ---- 发布操作 ---- */
+
+  const openEditDraft = (item: ContentItem): void => {
+    setEditingDraft(item);
+    draftForm.setFieldsValue({
+      targetAccountId: item.targetAccount?.id,
+      productName: item.productName,
+      description: item.description,
+      scheduledTime: dayjs(item.scheduledTime),
+    });
+  };
+
+  const handleSaveDraft = async (): Promise<void> => {
+    if (!editingDraft) return;
+    const values = await draftForm.validateFields();
+    setSavingDraft(true);
+    try {
+      await api.patch(`/contents/${editingDraft.id}`, {
+        targetAccountId: values.targetAccountId,
+        productName: values.productName,
+        description: values.description,
+        scheduledTime: values.scheduledTime.toISOString(),
+      });
+      message.success('草稿已更新');
+      setEditingDraft(null);
+      draftForm.resetFields();
+      await loadList();
+    } catch (err) {
+      message.error(err instanceof Error ? err.message : '草稿更新失败');
+    } finally {
+      setSavingDraft(false);
+    }
+  };
+
+  const handleSubmitDraft = async (id: number): Promise<void> => {
+    try {
+      await api.post(`/contents/${id}/submit`);
+      message.success('已提交审核');
+      await loadList();
+    } catch (err) {
+      message.error(err instanceof Error ? err.message : '提交审核失败');
+    }
+  };
+
+  const handleWithdrawPending = async (id: number): Promise<void> => {
+    try {
+      await api.post(`/contents/${id}/withdraw`, {});
+      message.success('已撤回到草稿');
+      await loadList();
+    } catch (err) {
+      message.error(err instanceof Error ? err.message : '撤回失败');
+    }
+  };
 
   const handlePublishNow = async (id: number): Promise<void> => {
     try {
@@ -381,36 +444,58 @@ export const CreatorUploadPage: React.FC = () => {
       render: (_, r) => dayjs(r.createdAt).format('YYYY-MM-DD HH:mm'),
     },
     {
-      title: '发布',
-      width: 220,
+      title: '操作',
+      width: 260,
       fixed: 'right',
       render: (_: unknown, r: ContentItem) => {
-        if (r.status === 'PUBLISHED') {
-          return   <Button
-          size="small"
-          icon={<SendOutlined />}
-          disabled={true}
-        >
-         已发布
-        </Button>;
-        }
-        if (r.status === 'REJECTED') {
-          return   <Button
-          size="small"
-          icon={<ClockCircleOutlined />}
-          disabled={true}
-        >
-         已驳回
-        </Button>;
+        if (r.status === 'DRAFT') {
+          return (
+            <Space size={4}>
+              <Button size="small" icon={<EditOutlined />} onClick={() => openEditDraft(r)}>
+                编辑
+              </Button>
+              <Popconfirm
+                title="确认提交审核？"
+                description="提交后将进入待审核，不可编辑"
+                onConfirm={() => void handleSubmitDraft(r.id)}
+                okText="提交"
+                cancelText="取消"
+              >
+                <Button size="small" type="primary" icon={<CheckOutlined />}>
+                  提交审核
+                </Button>
+              </Popconfirm>
+            </Space>
+          );
         }
         if (r.status === 'PENDING_REVIEW') {
-          return   <Button
-          size="small"
-          icon={<ClockCircleOutlined />}
-          disabled={true}
-        >
-         待审核
-        </Button>;
+          return (
+            <Popconfirm
+              title="确认撤回到草稿？"
+              description="撤回后可继续编辑并再次提交审核"
+              onConfirm={() => void handleWithdrawPending(r.id)}
+              okText="确认撤回"
+              cancelText="取消"
+            >
+              <Button size="small" icon={<RollbackOutlined />}>
+                撤回
+              </Button>
+            </Popconfirm>
+          );
+        }
+        if (r.status === 'PUBLISHED') {
+          return (
+            <Button size="small" icon={<SendOutlined />} disabled>
+              已发布
+            </Button>
+          );
+        }
+        if (r.status === 'REJECTED') {
+          return (
+            <Button size="small" icon={<ClockCircleOutlined />} disabled>
+              已驳回
+            </Button>
+          );
         }
         return (
           <Space size={4}>
@@ -496,6 +581,7 @@ export const CreatorUploadPage: React.FC = () => {
               value={filterStatus}
               onChange={setFilterStatus}
               options={[
+                { value: 'DRAFT', label: '草稿' },
                 { value: 'PENDING_REVIEW', label: '待审核' },
                 { value: 'APPROVED', label: '待发布' },
                 { value: 'REJECTED', label: '已驳回' },
@@ -658,6 +744,66 @@ export const CreatorUploadPage: React.FC = () => {
             style={{ marginTop: 8 }}
           />
         )}
+      </Modal>
+
+      <Modal
+        title="编辑草稿"
+        open={editingDraft != null}
+        onCancel={() => {
+          if (!savingDraft) {
+            setEditingDraft(null);
+            draftForm.resetFields();
+          }
+        }}
+        onOk={() => void handleSaveDraft()}
+        okText="保存"
+        cancelText="取消"
+        confirmLoading={savingDraft}
+        destroyOnClose
+      >
+        <Form form={draftForm} layout="vertical">
+          <Form.Item
+            label="目标账号"
+            name="targetAccountId"
+            rules={[{ required: true, message: '请选择目标账号' }]}
+          >
+            <Select
+              placeholder="选择目标账号"
+              showSearch
+              optionFilterProp="label"
+              options={accounts.map((a) => ({
+                label: `${a.platform.name}(${a.platform.region}) - ${a.accountName}`,
+                value: a.id,
+              }))}
+            />
+          </Form.Item>
+          <Form.Item
+            label="产品名称"
+            name="productName"
+            rules={[{ required: true, message: '请选择产品名称' }]}
+          >
+            <Select
+              placeholder="选择产品"
+              showSearch
+              optionFilterProp="label"
+              options={products.map((p) => ({ label: p.name, value: p.name }))}
+            />
+          </Form.Item>
+          <Form.Item
+            label="视频文案"
+            name="description"
+            rules={[{ required: true, message: '请输入视频文案' }]}
+          >
+            <Input.TextArea rows={3} placeholder="请输入视频文案" />
+          </Form.Item>
+          <Form.Item
+            label="计划发布时间"
+            name="scheduledTime"
+            rules={[{ required: true, message: '请选择计划发布时间' }]}
+          >
+            <DatePicker showTime format="YYYY-MM-DD HH:mm" style={{ width: '100%' }} />
+          </Form.Item>
+        </Form>
       </Modal>
 
       {/* 视频预览弹窗 */}

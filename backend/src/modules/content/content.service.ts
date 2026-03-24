@@ -9,6 +9,7 @@ import { DataSource, Repository } from 'typeorm';
 
 import { ContentEntity, type ContentStatus } from './content.entity';
 import type { CreateContentDto } from './dto/create-content.dto';
+import type { UpdateContentDraftDto } from './dto/update-content-draft.dto';
 import { SocialAccountEntity } from '../social-account/social-account.entity';
 import { AuditLogService } from '../audit-log/audit-log.service';
 
@@ -23,9 +24,9 @@ export class ContentService {
     private readonly dataSource: DataSource,
   ) {}
 
-  async create(uploaderId: number, dto: CreateContentDto): Promise<ContentEntity> {
+  private async assertAccountUsable(targetAccountId: number): Promise<void> {
     const account = await this.socialAccountRepo.findOne({
-      where: { id: dto.targetAccountId },
+      where: { id: targetAccountId },
       relations: { platform: true },
     });
     if (!account) {
@@ -37,6 +38,28 @@ export class ContentService {
     if (account.platform && !account.platform.isEnabled) {
       throw new BadRequestException('所属平台已禁用，无法提交');
     }
+  }
+
+  private ensureCanSubmit(content: ContentEntity): void {
+    if (!content.filePath || !content.fileOriginalName) {
+      throw new BadRequestException('请先上传视频文件');
+    }
+    if (!content.targetAccountId) {
+      throw new BadRequestException('请选择目标账号');
+    }
+    if (!content.productName?.trim()) {
+      throw new BadRequestException('请输入产品名称');
+    }
+    if (!content.description?.trim()) {
+      throw new BadRequestException('请输入视频文案');
+    }
+    if (!content.scheduledTime) {
+      throw new BadRequestException('请选择计划发布时间');
+    }
+  }
+
+  async create(uploaderId: number, dto: CreateContentDto): Promise<ContentEntity> {
+    await this.assertAccountUsable(dto.targetAccountId);
 
     const created = this.contentRepo.create({
       uploaderId,
@@ -46,7 +69,7 @@ export class ContentService {
       productName: dto.productName,
       description: dto.description,
       scheduledTime: new Date(dto.scheduledTime),
-      status: 'PENDING_REVIEW',
+      status: 'DRAFT',
       rejectReason: null,
       publishedAt: null,
       publisherId: null,
@@ -64,6 +87,84 @@ export class ContentService {
       },
     });
     return saved;
+  }
+
+  async updateDraft(contentId: number, uploaderId: number, dto: UpdateContentDraftDto): Promise<ContentEntity> {
+    const content = await this.assertOwner(contentId, uploaderId);
+    if (content.status !== 'DRAFT') {
+      throw new BadRequestException('仅草稿可编辑');
+    }
+
+    if (dto.targetAccountId != null) {
+      await this.assertAccountUsable(dto.targetAccountId);
+      content.targetAccountId = dto.targetAccountId;
+    }
+    if (dto.productName != null) {
+      content.productName = dto.productName;
+    }
+    if (dto.description != null) {
+      content.description = dto.description;
+    }
+    if (dto.scheduledTime != null) {
+      content.scheduledTime = new Date(dto.scheduledTime);
+    }
+
+    const saved = await this.contentRepo.save(content);
+    await this.auditLogService.create({
+      userId: uploaderId,
+      actionType: 'CONTENT_EDIT',
+      targetId: saved.id,
+      details: {
+        targetAccountId: saved.targetAccountId,
+        productName: saved.productName,
+        scheduledTime: saved.scheduledTime.toISOString(),
+      },
+    });
+    return await this.findOneOrThrow(saved.id);
+  }
+
+  async submitDraft(contentId: number, uploaderId: number): Promise<ContentEntity> {
+    const content = await this.assertOwner(contentId, uploaderId);
+    if (content.status !== 'DRAFT') {
+      throw new BadRequestException('仅草稿可提交审核');
+    }
+    await this.assertAccountUsable(content.targetAccountId);
+    this.ensureCanSubmit(content);
+    content.status = 'PENDING_REVIEW';
+    content.rejectReason = null;
+    const saved = await this.contentRepo.save(content);
+    await this.auditLogService.create({
+      userId: uploaderId,
+      actionType: 'CONTENT_SUBMIT',
+      targetId: saved.id,
+      details: {
+        previousStatus: 'DRAFT',
+        newStatus: 'PENDING_REVIEW',
+        targetAccountId: saved.targetAccountId,
+        productName: saved.productName,
+      },
+    });
+    return await this.findOneOrThrow(saved.id);
+  }
+
+  async withdrawPending(contentId: number, uploaderId: number, reason?: string): Promise<ContentEntity> {
+    const content = await this.assertOwner(contentId, uploaderId);
+    if (content.status !== 'PENDING_REVIEW') {
+      throw new BadRequestException('仅待审核内容可撤回');
+    }
+    content.status = 'DRAFT';
+    const saved = await this.contentRepo.save(content);
+    await this.auditLogService.create({
+      userId: uploaderId,
+      actionType: 'CONTENT_WITHDRAW',
+      targetId: saved.id,
+      details: {
+        previousStatus: 'PENDING_REVIEW',
+        newStatus: 'DRAFT',
+        reason: reason ?? null,
+      },
+    });
+    return await this.findOneOrThrow(saved.id);
   }
 
   async findMine(uploaderId: number): Promise<ContentEntity[]> {
@@ -128,6 +229,9 @@ export class ContentService {
 
   async reject(contentId: number, adminId: number, rejectReason: string): Promise<ContentEntity> {
     const content = await this.findOneOrThrow(contentId);
+    if (content.status !== 'PENDING_REVIEW') {
+      throw new BadRequestException('仅待审核内容可执行驳回');
+    }
     const previousStatus = content.status;
     content.status = 'REJECTED';
     content.rejectReason = rejectReason;

@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
 
@@ -11,6 +11,8 @@ import { ContentService } from './content.service';
 import { CreateContentDto } from './dto/create-content.dto';
 import { AdminContentQueryDto } from './dto/admin-query.dto';
 import { RejectContentDto } from './dto/reject-content.dto';
+import { UpdateContentDraftDto } from './dto/update-content-draft.dto';
+import { WithdrawContentDto } from './dto/withdraw-content.dto';
 
 interface AuthedRequest extends Request {
   user?: JwtPayload;
@@ -30,6 +32,41 @@ export class ContentController {
   async create(@Req() req: AuthedRequest, @Body() dto: CreateContentDto): Promise<ContentEntity> {
     const userId = req.user?.sub ?? 0;
     return await this.contentService.create(userId, dto);
+  }
+
+  @ApiOperation({ summary: '编辑草稿（Creator / Admin）' })
+  @ApiResponse({ status: 200, type: ContentEntity })
+  @Roles('CREATOR', 'ADMIN')
+  @Patch(':id')
+  async updateDraft(
+    @Req() req: AuthedRequest,
+    @Param('id') id: string,
+    @Body() dto: UpdateContentDraftDto,
+  ): Promise<ContentEntity> {
+    const userId = req.user?.sub ?? 0;
+    return await this.contentService.updateDraft(Number(id), userId, dto);
+  }
+
+  @ApiOperation({ summary: '提交草稿审核（Creator / Admin）' })
+  @ApiResponse({ status: 200, type: ContentEntity })
+  @Roles('CREATOR', 'ADMIN')
+  @Post(':id/submit')
+  async submitDraft(@Req() req: AuthedRequest, @Param('id') id: string): Promise<ContentEntity> {
+    const userId = req.user?.sub ?? 0;
+    return await this.contentService.submitDraft(Number(id), userId);
+  }
+
+  @ApiOperation({ summary: '撤回待审核内容（Creator / Admin）' })
+  @ApiResponse({ status: 200, type: ContentEntity })
+  @Roles('CREATOR', 'ADMIN')
+  @Post(':id/withdraw')
+  async withdrawPending(
+    @Req() req: AuthedRequest,
+    @Param('id') id: string,
+    @Body() dto: WithdrawContentDto,
+  ): Promise<ContentEntity> {
+    const userId = req.user?.sub ?? 0;
+    return await this.contentService.withdrawPending(Number(id), userId, dto.reason);
   }
 
   @ApiOperation({ summary: '我的作品列表（Creator / Admin）' })

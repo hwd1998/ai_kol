@@ -319,6 +319,8 @@ export const AdminReviewBoardPage: React.FC = () => {
             <Select
               allowClear
               placeholder="目标账号"
+              showSearch
+              optionFilterProp="label"
               style={{ width: 220 }}
               value={filterTargetAccountId}
               onChange={(v) => setFilterTargetAccountId(v)}
@@ -332,6 +334,8 @@ export const AdminReviewBoardPage: React.FC = () => {
             <Select
               allowClear
               placeholder="产品名称"
+              showSearch
+              optionFilterProp="label"
               style={{ width: 160 }}
               value={filterProductName}
               onChange={(v) => setFilterProductName(v)}

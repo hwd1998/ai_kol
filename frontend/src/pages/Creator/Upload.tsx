@@ -20,6 +20,7 @@ import dayjs from 'dayjs';
 import React from 'react';
 
 import { TableEllipsisText } from '../../components/TableEllipsisText';
+import { useAppSelector } from '../../hooks/store';
 import { api } from '../../services/api';
 
 /* ---------- 类型 ---------- */
@@ -82,6 +83,7 @@ function formatTargetAccountLabel(acct: ContentItem['targetAccount']): string {
 /* ---------- 组件 ---------- */
 
 export const CreatorUploadPage: React.FC = () => {
+  const role = useAppSelector((state) => state.auth.role);
   const [form] = Form.useForm<UploadMetaForm>();
   const [modalOpen, setModalOpen] = React.useState(false);
   const [uploading, setUploading] = React.useState(false);
@@ -116,12 +118,13 @@ export const CreatorUploadPage: React.FC = () => {
   const loadList = React.useCallback(async () => {
     setLoading(true);
     try {
-      const res = await api.get<ContentItem[]>('/contents/mine');
+      const endpoint = role === 'ADMIN' ? '/contents' : '/contents/mine';
+      const res = await api.get<ContentItem[]>(endpoint);
       setList(res.data);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [role]);
 
   React.useEffect(() => {
     void (async () => {
@@ -466,6 +469,8 @@ export const CreatorUploadPage: React.FC = () => {
             <Select
               allowClear
               placeholder="目标账号"
+              showSearch
+              optionFilterProp="label"
               style={{ width: 220 }}
               value={filterTargetAccountId}
               onChange={setFilterTargetAccountId}
@@ -477,6 +482,8 @@ export const CreatorUploadPage: React.FC = () => {
             <Select
               allowClear
               placeholder="产品名称"
+              showSearch
+              optionFilterProp="label"
               style={{ width: 160 }}
               value={filterProductName}
               onChange={setFilterProductName}
@@ -601,13 +608,13 @@ export const CreatorUploadPage: React.FC = () => {
               options={products.map((p) => ({ label: p.name, value: p.name }))}
             />
           </Form.Item>
-          {/* <Form.Item
+          <Form.Item
             label="视频文案"
             name="description"
             rules={[{ required: true, message: '请输入视频文案' }]}
           >
             <Input.TextArea rows={3} placeholder="请输入视频文案" />
-          </Form.Item> */}
+          </Form.Item>
           <Form.Item
             label="计划发布时间"
             name="scheduledTime"
